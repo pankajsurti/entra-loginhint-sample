@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSAL Entra ID - Login Hint Sample</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 0 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            color: #0078d4;
+            margin-top: 0;
+        }
+        button {
+            padding: 10px 24px;
+            font-size: 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+            transition: background 0.2s;
+        }
+        #btn-login {
+            background: #0078d4;
+            color: #fff;
+        }
+        #btn-login:hover {
+            background: #005a9e;
+        }
+        #btn-logout {
+            background: #d13438;
+            color: #fff;
+            display: none;
+        }
+        #btn-logout:hover {
+            background: #a4262c;
+        }
+        #user-info {
+            display: none;
+            margin-top: 20px;
+        }
+        #user-info p {
+            margin: 6px 0;
+        }
+        .label {
+            font-weight: 600;
+            color: #333;
+        }
+        .value {
+            color: #555;
+        }
+        #claims-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        #claims-table th, #claims-table td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+        }
+        #claims-table th {
+            background: #f0f0f0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Microsoft Entra ID Login</h1>
+        <p>Sign in with your Microsoft account using MSAL.js and logout with <code>login_hint</code> claim.</p>
+        <button id="btn-login" onclick="signIn()">Sign In</button>
+        <button id="btn-logout" onclick="signOut()">Sign Out</button>
+    </div>
+
+    <div id="user-info" class="card">
+        <h2>Signed-in User</h2>
+        <p><span class="label">Name:</span> <span id="display-name" class="value"></span></p>
+        <p><span class="label">Username:</span> <span id="display-username" class="value"></span></p>
+        <p><span class="label">login_hint claim:</span> <span id="display-login-hint" class="value"></span></p>
+        <h3>ID Token Claims</h3>
+        <table id="claims-table">
+            <thead>
+                <tr><th>Claim</th><th>Value</th></tr>
+            </thead>
+            <tbody id="claims-body"></tbody>
+        </table>
+    </div>
+
+    <!-- MSAL.js v2 (msal-browser) from CDN -->
+    <!-- <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script> -->
+    <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+    <script>
+        // ============================================================
+        // MSAL Configuration — replace with your own App Registration
+        // ============================================================
+        const msalConfig = {
+            auth: {
+                clientId: "2f5dade9-2b9b-483c-bdce-de11dcad239e",           // Application (client) ID from Entra ID app registration
+                authority: "https://login.microsoftonline.com/e95f1b23-abaf-45ee-821d-b7ab251ab3bf", // or "common" / "organizations"
+                redirectUri: "https://localhost:5500" | window.location.origin,   // Must match a redirect URI registered in the app
+            },
+            cache: {
+                cacheLocation: "sessionStorage",
+                storeAuthStateInCookie: false,
+            },
+        };
+
+        const loginRequest = {
+            scopes: ["openid", "profile", "User.Read"],
+        };
+
+        // Create the MSAL instance
+        const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+        // Handle redirect response on page load
+        msalInstance.handleRedirectPromise()
+            .then(handleResponse)
+            .catch(function (error) {
+                console.error("Redirect error:", error);
+            });
+
+        /**
+         * Handle the authentication response.
+         */
+        function handleResponse(response) {
+            if (response) {
+                updateUI(response.account);
+            } else {
+                // Check if user is already signed in
+                const accounts = msalInstance.getAllAccounts();
+                if (accounts.length > 0) {
+                    updateUI(accounts[0]);
+                }
+            }
+        }
+
+        /**
+         * Sign in using a popup.
+         */
+        function signIn() {
+            msalInstance.loginPopup(loginRequest)
+                .then(function (response) {
+                    updateUI(response.account);
+                })
+                .catch(function (error) {
+                    console.error("Login error:", error);
+                });
+        }
+
+        /**
+         * Sign out using the login_hint claim from the ID token.
+         * Passing logoutHint skips the "pick an account" prompt during logout.
+         */
+        function signOut() {
+            const account = msalInstance.getAllAccounts()[0];
+            if (!account) return;
+
+            // Extract the login_hint claim from the ID token claims
+            const loginHint = account.idTokenClaims && account.idTokenClaims.login_hint;
+
+            const logoutRequest = {
+                account: account,
+                postLogoutRedirectUri: "https://localhost:5500/index.html" || window.location.origin,
+            };
+
+            // If login_hint claim is available, use it as logoutHint
+            // This allows seamless logout without the account picker
+            if (loginHint) {
+                logoutRequest.logoutHint = loginHint;
+            }
+
+            msalInstance.logoutPopup(logoutRequest)
+                .then(function () {
+                    resetUI();
+                })
+                .catch(function (error) {
+                    console.error("Logout error:", error);
+                });
+        }
+
+        /**
+         * Update the UI with the signed-in user's info.
+         */
+        function updateUI(account) {
+            document.getElementById("btn-login").style.display = "none";
+            document.getElementById("btn-logout").style.display = "inline-block";
+            document.getElementById("user-info").style.display = "block";
+
+            document.getElementById("display-name").textContent = account.name || "N/A";
+            document.getElementById("display-username").textContent = account.username || "N/A";
+
+            const loginHint = account.idTokenClaims && account.idTokenClaims.login_hint;
+            document.getElementById("display-login-hint").textContent = loginHint || "(not present — enable optional claim in app registration)";
+
+            // Render all ID token claims
+            const tbody = document.getElementById("claims-body");
+            tbody.innerHTML = "";
+            if (account.idTokenClaims) {
+                Object.keys(account.idTokenClaims).forEach(function (key) {
+                    const row = document.createElement("tr");
+                    const claimCell = document.createElement("td");
+                    const valueCell = document.createElement("td");
+                    claimCell.textContent = key;
+                    valueCell.textContent = JSON.stringify(account.idTokenClaims[key]);
+                    row.appendChild(claimCell);
+                    row.appendChild(valueCell);
+                    tbody.appendChild(row);
+                });
+            }
+        }
+
+        /**
+         * Reset the UI after sign out.
+         */
+        function resetUI() {
+            document.getElementById("btn-login").style.display = "inline-block";
+            document.getElementById("btn-logout").style.display = "none";
+            document.getElementById("user-info").style.display = "none";
+        }
+    </script>
+</body>
+</html>
