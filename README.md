@@ -141,8 +141,8 @@ Open `index.html` and locate the MSAL configuration block (around line 96):
 ```javascript
 const msalConfig = {
     auth: {
-        clientId: "2f5dade9-2b9b-483c-bdce-de11dcad239e",           // <-- Replace with YOUR Application (client) ID
-        authority: "https://login.microsoftonline.com/e95f1b23-abaf-45ee-821d-b7ab251ab3bf", // <-- Replace the GUID with YOUR Directory (tenant) ID
+        clientId: "xxxxx",           // <-- Replace with YOUR Application (client) ID
+        authority: "https://login.microsoftonline.com/xxxxxx", // <-- Replace the GUID with YOUR Directory (tenant) ID
         redirectUri: "https://localhost:5500" | window.location.origin,
     },
     ...
